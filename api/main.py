@@ -1,3 +1,7 @@
+import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Optional
@@ -7,8 +11,14 @@ from recommender.ranker import balanced_ranking
 
 app = FastAPI(title="SHL Assessment Recommendation API")
 
-# Load recommender once at startup
-recommender = SHLRecommender()
+# ---------- Lazy-loaded recommender ----------
+recommender = None
+
+def get_recommender():
+    global recommender
+    if recommender is None:
+        recommender = SHLRecommender()
+    return recommender
 
 
 # ---------- Request / Response Models ----------
@@ -28,12 +38,9 @@ class AssessmentResponse(BaseModel):
     adaptive_support: Optional[str] = None
 
 
-# ---------- Utility helpers (VERY IMPORTANT) ----------
+# ---------- Utility helpers ----------
 
 def safe_list(value):
-    """
-    Ensures test_type is always a list of strings.
-    """
     if value is None:
         return []
     if isinstance(value, list):
@@ -44,9 +51,6 @@ def safe_list(value):
 
 
 def safe_str(value):
-    """
-    Converts nan / None to None, otherwise string.
-    """
     if value is None:
         return None
     if str(value).lower() == "nan":
@@ -64,8 +68,11 @@ def health():
 @app.post("/recommend")
 def recommend(req: RecommendRequest):
     try:
+        # ✅ Lazy load happens HERE (not at startup)
+        rec = get_recommender()
+
         # 1. Retrieve
-        raw_results = recommender.search(req.query, top_k=20)
+        raw_results = rec.search(req.query, top_k=20)
 
         # 2. Rank
         final_results = balanced_ranking(
@@ -74,7 +81,7 @@ def recommend(req: RecommendRequest):
             final_k=req.top_k
         )
 
-        # 3. Clean JSON-safe response
+        # 3. JSON-safe response
         response = []
         for r in final_results:
             response.append({
