@@ -6,7 +6,7 @@ st.set_page_config(page_title="SHL Assessment Recommender", layout="centered")
 
 st.title("🔍 SHL Assessment Recommendation System")
 
-API_URL = "http://localhost:8000/recommend"
+API_URL = "https://shl-assessment-api-ipbi.onrender.com/recommend"
 
 query = st.text_area(
     "Enter Job Description or Hiring Query",
